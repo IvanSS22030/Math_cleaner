@@ -5,6 +5,7 @@ Una aplicación web moderna para limpiar automáticamente los tags MathML de fó
 ## 🚀 Características
 
 - **Limpieza automática de MathML**: Extrae el texto matemático limpio de tags XML/MathML complejos
+- **Preserva formato original**: Mantiene saltos de línea, párrafos y estructura del texto
 - **Interfaz moderna**: Diseño intuitivo y responsivo
 - **Múltiples métodos de entrada**: Pegado manual, desde portapapeles, o arrastrar y soltar
 - **Copia fácil**: Un click para copiar el resultado al portapapeles
@@ -102,11 +103,12 @@ Web tag remover for word/
 
 ### 📝 Ejemplos de conversión:
 
-| Antes (MathML)                                         | Después (Texto limpio)      |
-| ------------------------------------------------------ | --------------------------- |
-| `<math>...<annotation>x^2 + 1</annotation>...</math>`  | `x^2 + 1`                   |
-| Tags complejos con `<msup><mi>x</mi><mn>2</mn></msup>` | `x^2`                       |
-| Múltiples ecuaciones en un solo bloque                 | Texto separado por espacios |
+| Antes (MathML)                                         | Después (Texto limpio)                              |
+| ------------------------------------------------------ | --------------------------------------------------- |
+| `<math>...<annotation>x^2 + 1</annotation>...</math>`  | `x^2 + 1`                                           |
+| Tags complejos con `<msup><mi>x</mi><mn>2</mn></msup>` | `x^2`                                               |
+| Múltiples ecuaciones en párrafos separados             | Mantiene la estructura original con saltos de línea |
+| Texto explicativo + fórmulas                           | Preserva explicaciones y formato                    |
 
 ## 🚨 Limitaciones conocidas
 

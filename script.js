@@ -25,7 +25,7 @@ function cleanMathTags(text) {
         annotations.push(match[1].trim());
     }
 
-    // Si encontramos annotations, las usamos
+    // Si encontramos annotations, las usamos (método preferido)
     if (annotations.length > 0) {
         // Reemplazar cada tag <math>...</math> con su correspondiente annotation
         const mathTagRegex = /<math[^>]*>.*?<\/math>/gi;
@@ -48,8 +48,8 @@ function cleanMathTags(text) {
     // Decodificar entidades HTML
     cleanedText = decodeHTMLEntities(cleanedText);
     
-    // Limpiar espacios múltiples y saltos de línea
-    cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
+    // Preservar formato: mantener saltos de línea y estructura
+    cleanedText = preserveTextFormat(cleanedText);
     
     // Limpiar caracteres especiales de MathML que puedan quedar
     cleanedText = cleanMathMLCharacters(cleanedText);
@@ -79,14 +79,13 @@ function processMathMLTags(text) {
         '&ge;': '≥',
         '&ne;': '≠',
         
-        // Fracciones y potencias se manejan por estructura
         // Paréntesis
         '&lpar;': '(',
         '&rpar;': ')',
         '&lbrack;': '[',
         '&rbrack;': ']',
         
-        // Espacios
+        // Espacios (preservar algunos espacios)
         '&nbsp;': ' ',
         '&thinsp;': ' ',
     };
@@ -178,21 +177,50 @@ function decodeHTMLEntities(text) {
     return decoded;
 }
 
-// Función para limpiar caracteres especiales de MathML
-function cleanMathMLCharacters(text) {
-    // Reemplazar múltiples espacios por uno solo
-    text = text.replace(/\s+/g, ' ');
+// Función para preservar el formato del texto
+function preserveTextFormat(text) {
+    // Normalizar diferentes tipos de saltos de línea
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     
-    // Remover espacios alrededor de operadores
-    text = text.replace(/\s*([+\-*/=<>≤≥≠])\s*/g, ' $1 ');
+    // Preservar párrafos y estructura
+    // Reemplazar múltiples saltos de línea por doble salto (párrafos)
+    text = text.replace(/\n\s*\n\s*\n+/g, '\n\n');
     
-    // Remover espacios extra alrededor de paréntesis
-    text = text.replace(/\s*([()])\s*/g, '$1');
+    // Limpiar espacios al inicio y final de cada línea, pero mantener la estructura
+    text = text.split('\n').map(line => {
+        // Reemplazar múltiples espacios internos por uno solo, pero mantener estructura
+        return line.replace(/[ \t]+/g, ' ').trim();
+    }).join('\n');
     
-    // Limpiar espacios al inicio y final
+    // Remover líneas completamente vacías excesivas (más de 2 seguidas)
+    text = text.replace(/\n{3,}/g, '\n\n');
+    
+    // Limpiar espacios al inicio y final del texto completo
     text = text.trim();
     
     return text;
+}
+
+// Función para limpiar caracteres especiales de MathML
+function cleanMathMLCharacters(text) {
+    // Procesar línea por línea para mantener formato
+    const lines = text.split('\n');
+    
+    const cleanedLines = lines.map(line => {
+        // Remover espacios extra alrededor de operadores matemáticos
+        line = line.replace(/\s*([+\-*/=<>≤≥≠])\s*/g, ' $1 ');
+        
+        // Remover espacios extra alrededor de paréntesis
+        line = line.replace(/\s*([()])\s*/g, '$1');
+        
+        // Limpiar espacios múltiples internos
+        line = line.replace(/\s{2,}/g, ' ');
+        
+        // Limpiar espacios al inicio y final de la línea
+        return line.trim();
+    });
+    
+    return cleanedLines.join('\n');
 }
 
 // Función para mostrar notificaciones
