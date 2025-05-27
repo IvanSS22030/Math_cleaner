@@ -48,6 +48,12 @@ function cleanMathTags(text) {
     // Decodificar entidades HTML
     cleanedText = decodeHTMLEntities(cleanedText);
     
+    // Limpiar comandos LaTeX y formatos especiales
+    cleanedText = cleanLaTeXCommands(cleanedText);
+    
+    // Limpiar casos específicos problemáticos adicionales
+    cleanedText = cleanSpecificProblematicCases(cleanedText);
+    
     // Preservar formato: mantener saltos de línea y estructura
     cleanedText = preserveTextFormat(cleanedText);
     
@@ -102,7 +108,17 @@ function processMathMLTags(text) {
 
     for (const tag of mathMLTags) {
         const regex = new RegExp(`<${tag}[^>]*>(.*?)<\/${tag}>`, 'gi');
-        processed = processed.replace(regex, '$1');
+        processed = processed.replace(regex, (match, content) => {
+            // Limpiar contenido específico de cada tag
+            content = content.trim();
+            
+            // Si es un operador matemático, añadir espacios apropiados
+            if (tag === 'mo' && content.match(/^[+\-*/=<>≤≥≠]$/)) {
+                return ` ${content} `;
+            }
+            
+            return content;
+        });
     }
 
     // Manejar potencias (msup)
@@ -177,10 +193,112 @@ function decodeHTMLEntities(text) {
     return decoded;
 }
 
+// Función para limpiar comandos LaTeX y formatos especiales
+function cleanLaTeXCommands(text) {
+    // Limpiar comandos \text{...}
+    text = text.replace(/\\text\{([^}]*)\}/gi, '$1');
+    
+    // Limpiar arrays/tablas complejas con contenido matemático
+    // Patrón más agresivo para arrays con contenido mixto
+    text = text.replace(/\\begin\{array\}[^}]*\}[\s\S]*?\\end\{array\}/gi, (match) => {
+        // Extraer solo el contenido matemático útil del array
+        let content = match.replace(/\\begin\{array\}[^}]*\}/gi, '');
+        content = content.replace(/\\end\{array\}/gi, '');
+        content = content.replace(/\\hline/gi, '');
+        content = content.replace(/\\\\/gi, '\n');
+        content = content.replace(/&/gi, ' ');
+        return content;
+    });
+    
+    // Limpiar comandos de array/tabla restantes
+    text = text.replace(/\\begin\{array\}[^}]*\}/gi, '');
+    text = text.replace(/\\end\{array\}/gi, '');
+    
+    // Limpiar patrones problemáticos específicos como "2x2 + 3x + 1 + x2−2x + 43x2"
+    // Buscar y separar secuencias de números y variables pegadas
+    text = text.replace(/(\d+)([a-zA-Z])(\d+)/g, '$1$2^$3');
+    text = text.replace(/([a-zA-Z])(\d+)([+\-])(\d+)/g, '$1^$2 $3 $4');
+    
+    // Limpiar comandos de líneas
+    text = text.replace(/\\hline/gi, '');
+    text = text.replace(/\\\\/gi, '\n');
+    
+    // Limpiar espaciado LaTeX
+    text = text.replace(/\\quad/gi, ' ');
+    text = text.replace(/\\qquad/gi, ' ');
+    text = text.replace(/\\,/gi, ' ');
+    text = text.replace(/\\:/gi, ' ');
+    text = text.replace(/\\;/gi, ' ');
+    text = text.replace(/\\!/gi, '');
+    
+    // Limpiar otros comandos LaTeX comunes
+    text = text.replace(/\\cdot/gi, '·');
+    text = text.replace(/\\times/gi, '×');
+    text = text.replace(/\\div/gi, '÷');
+    text = text.replace(/\\pm/gi, '±');
+    text = text.replace(/\\mp/gi, '∓');
+    text = text.replace(/\\implies/gi, '⟹');
+    
+    // Limpiar comandos de formato
+    text = text.replace(/\\textbf\{([^}]*)\}/gi, '$1');
+    text = text.replace(/\\textit\{([^}]*)\}/gi, '$1');
+    text = text.replace(/\\emph\{([^}]*)\}/gi, '$1');
+    text = text.replace(/\\underline\{([^}]*)\}/gi, '$1');
+    
+    // Limpiar caracteres especiales LaTeX
+    text = text.replace(/\\&/gi, '&');
+    text = text.replace(/\\%/gi, '%');
+    text = text.replace(/\\#/gi, '#');
+    text = text.replace(/\\\$/gi, '$');
+    text = text.replace(/\\{/gi, '{');
+    text = text.replace(/\\}/gi, '}');
+    
+    // Limpiar patrones de array residuales específicos
+    text = text.replace(/\{[r|c|l]+\}/gi, '');
+    text = text.replace(/&+/gi, ' ');
+    
+    return text;
+}
+
+// Función para limpiar casos específicos problemáticos
+function cleanSpecificProblematicCases(text) {
+    // Casos como "2x2 + 3x + 1 + x2−2x + 43x2 + x + 5"
+    // Separar dígitos pegados incorrectamente con variables
+    text = text.replace(/(\d)([a-zA-Z])(\d)(\s*[+\-]\s*)(\d)([a-zA-Z])/g, '$1$2^$3 $4 $5$6');
+    
+    // Casos como "43x2" donde debería ser "4 + 3x^2" o "43x^2"
+    text = text.replace(/(\d{2})([a-zA-Z])(\d)/g, (match, digits, variable, exp) => {
+        // Si son exactamente 2 dígitos, separar como suma
+        if (digits.length === 2 && parseInt(digits[0]) < 5 && parseInt(digits[1]) < 5) {
+            return `${digits[0]} + ${digits[1]}${variable}^${exp}`;
+        }
+        return `${digits}${variable}^${exp}`;
+    });
+    
+    // Limpiar secuencias como "x2−2x + 4" donde el primer término está pegado
+    text = text.replace(/([a-zA-Z])(\d)([\+\-])/g, '$1^$2 $3');
+    
+    // Limpiar casos donde hay múltiples expresiones pegadas sin separación
+    text = text.replace(/([a-zA-Z]\^\d+|[a-zA-Z]|\d+)([a-zA-Z])(\d+)([+\-])/g, '$1 + $2^$3 $4');
+    
+    // Casos específicos de arrays mal procesados
+    text = text.replace(/\\begin\{array\}\{[rcl|]*\}/, '');
+    text = text.replace(/\\end\{array\}/, '');
+    
+    // Limpiar residuos de tablas como separadores
+    text = text.replace(/\s*\|\s*/g, ' ');
+    text = text.replace(/_{2,}/g, '');
+    
+    return text;
+}
+
 // Función para preservar el formato del texto
 function preserveTextFormat(text) {
     // Normalizar diferentes tipos de saltos de línea
     text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Limpiar caracteres de control extraños que pueden aparecer
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     
     // Preservar párrafos y estructura
     // Reemplazar múltiples saltos de línea por doble salto (párrafos)
@@ -188,8 +306,11 @@ function preserveTextFormat(text) {
     
     // Limpiar espacios al inicio y final de cada línea, pero mantener la estructura
     text = text.split('\n').map(line => {
+        // Limpiar caracteres extraños al inicio/final de línea
+        line = line.replace(/^[\s\u00A0\u2000-\u200B\u2028\u2029\u3000]+|[\s\u00A0\u2000-\u200B\u2028\u2029\u3000]+$/g, '');
+        
         // Reemplazar múltiples espacios internos por uno solo, pero mantener estructura
-        return line.replace(/[ \t]+/g, ' ').trim();
+        return line.replace(/[ \t\u00A0\u2000-\u200B]+/g, ' ').trim();
     }).join('\n');
     
     // Remover líneas completamente vacías excesivas (más de 2 seguidas)
@@ -207,11 +328,37 @@ function cleanMathMLCharacters(text) {
     const lines = text.split('\n');
     
     const cleanedLines = lines.map(line => {
+        // Limpiar secuencias problemáticas específicas como "2x2 + 3x + 1 + x2−2x + 43x2"
+        // Separar números y variables pegadas incorrectamente
+        line = line.replace(/(\d+)([a-zA-Z])([a-zA-Z])([+\-])/g, '$1$2^$3 $4');
+        line = line.replace(/([a-zA-Z])(\d+)([a-zA-Z])(\d+)/g, '$1^$2 + $3^$4');
+        
+        // Corregir patrones como "43x2" -> "4 + 3x^2"
+        line = line.replace(/(\d{2,})([a-zA-Z])(\d+)/g, (match, nums, variable, exp) => {
+            if (nums.length === 2) {
+                return `${nums[0]} + ${nums[1]}${variable}^${exp}`;
+            }
+            return `${nums}${variable}^${exp}`;
+        });
+        
         // Remover espacios extra alrededor de operadores matemáticos
         line = line.replace(/\s*([+\-*/=<>≤≥≠])\s*/g, ' $1 ');
         
         // Remover espacios extra alrededor de paréntesis
         line = line.replace(/\s*([()])\s*/g, '$1');
+        
+        // Limpiar puntos/dots extraños
+        line = line.replace(/\s*·\s*/g, ' · ');
+        line = line.replace(/\s*\^\s*/g, '^');
+        
+        // Limpiar caracteres especiales problemáticos
+        line = line.replace(/\{\}/g, '');
+        line = line.replace(/\{\s*\}/g, '');
+        line = line.replace(/\|+/g, '');
+        
+        // Limpiar múltiples operadores seguidos
+        line = line.replace(/([+\-])\s*([+\-])/g, '$1$2');
+        line = line.replace(/\s*([+\-])\s*([+\-])\s*/g, ' $1$2 ');
         
         // Limpiar espacios múltiples internos
         line = line.replace(/\s{2,}/g, ' ');
@@ -335,6 +482,11 @@ copyBtn.addEventListener('click', () => {
 clearInput.addEventListener('click', () => {
     mathInput.value = '';
     mathOutput.value = '';
+    
+    // Resetear tamaño de ambos textareas
+    resetTextareaSize(mathInput);
+    resetTextareaSize(mathOutput);
+    
     mathInput.focus();
     showNotification('🗑️ Texto limpiado', 'info');
 });
@@ -378,12 +530,48 @@ document.addEventListener('keydown', (e) => {
 
 // Auto-resize de textareas
 function autoResize(textarea) {
+    // Resetear height para calcular el tamaño correcto
     textarea.style.height = 'auto';
-    textarea.style.height = Math.max(200, textarea.scrollHeight) + 'px';
+    
+    // Calcular altura necesaria considerando contenido
+    const minHeight = 200;
+    const maxHeight = 600; // Límite máximo para evitar textareas gigantes
+    let newHeight = Math.max(minHeight, textarea.scrollHeight);
+    
+    // Si el textarea está vacío o casi vacío, volver al tamaño mínimo
+    if (textarea.value.trim().length === 0) {
+        newHeight = minHeight;
+    } else {
+        newHeight = Math.min(maxHeight, newHeight);
+    }
+    
+    textarea.style.height = newHeight + 'px';
+}
+
+// Función para resetear tamaño de textarea
+function resetTextareaSize(textarea) {
+    textarea.style.height = '200px';
 }
 
 mathInput.addEventListener('input', () => autoResize(mathInput));
 mathOutput.addEventListener('input', () => autoResize(mathOutput));
+
+// Detectar cuando se borra todo el contenido y resetear tamaño
+mathInput.addEventListener('input', (e) => {
+    if (e.target.value.trim().length === 0) {
+        resetTextareaSize(mathInput);
+    } else {
+        autoResize(mathInput);
+    }
+});
+
+mathOutput.addEventListener('input', (e) => {
+    if (e.target.value.trim().length === 0) {
+        resetTextareaSize(mathOutput);
+    } else {
+        autoResize(mathOutput);
+    }
+});
 
 // Procesar automáticamente cuando se pega contenido
 mathInput.addEventListener('paste', (e) => {
