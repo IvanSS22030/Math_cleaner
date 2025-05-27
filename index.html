@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limpiador de Tags Matemáticos</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-magic"></i> Limpiador de Tags Matemáticos</h1>
+            <p>Convierte fórmulas matemáticas con tags MathML a texto limpio para Word</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <label for="mathInput">
+                    <i class="fas fa-paste"></i> Pega aquí tu texto con tags matemáticos:
+                </label>
+                <textarea 
+                    id="mathInput" 
+                    placeholder="Pega aquí el texto que copiaste de Grok o cualquier IA que contenga fórmulas matemáticas con tags MathML...
+
+Ejemplo:
+&lt;math xmlns=&quot;http://www.w3.org/1998/Math/MathML&quot;&gt;&lt;semantics&gt;...&lt;/semantics&gt;&lt;/math&gt;"
+                    rows="8"
+                ></textarea>
+                <div class="input-actions">
+                    <button id="clearInput" class="btn-secondary">
+                        <i class="fas fa-trash"></i> Limpiar
+                    </button>
+                    <button id="pasteBtn" class="btn-secondary">
+                        <i class="fas fa-clipboard"></i> Pegar del portapapeles
+                    </button>
+                </div>
+            </div>
+
+            <div class="process-section">
+                <button id="processBtn" class="btn-primary">
+                    <i class="fas fa-wand-magic-sparkles"></i> Limpiar Tags
+                </button>
+            </div>
+
+            <div class="output-section">
+                <label for="mathOutput">
+                    <i class="fas fa-check-circle"></i> Texto limpio (listo para Word):
+                </label>
+                <textarea 
+                    id="mathOutput" 
+                    placeholder="Aquí aparecerá tu texto limpio, sin tags MathML..."
+                    rows="8"
+                    readonly
+                ></textarea>
+                <div class="output-actions">
+                    <button id="copyBtn" class="btn-success">
+                        <i class="fas fa-copy"></i> Copiar resultado
+                    </button>
+                    <button id="downloadBtn" class="btn-secondary">
+                        <i class="fas fa-download"></i> Descargar como .txt
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <div class="examples-section">
+            <h3><i class="fas fa-lightbulb"></i> ¿Cómo funciona?</h3>
+            <div class="example">
+                <h4>Antes (con tags):</h4>
+                <code>&lt;math xmlns="http://www.w3.org/1998/Math/MathML"&gt;&lt;semantics&gt;&lt;mrow&gt;&lt;mo&gt;(&lt;/mo&gt;&lt;mn&gt;2&lt;/mn&gt;&lt;msup&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;mn&gt;2&lt;/mn&gt;&lt;/msup&gt;&lt;mo&gt;+&lt;/mo&gt;&lt;mn&gt;3&lt;/mn&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;mo&gt;+&lt;/mo&gt;&lt;mn&gt;1&lt;/mn&gt;&lt;mo&gt;)&lt;/mo&gt;&lt;/mrow&gt;&lt;annotation encoding="application/x-tex"&gt;(2x^2 + 3x + 1)&lt;/annotation&gt;&lt;/semantics&gt;&lt;/math&gt;</code>
+                
+                <h4>Después (texto limpio):</h4>
+                <code>(2x^2 + 3x + 1)</code>
+            </div>
+        </div>
+
+        <footer>
+            <p>💡 <strong>Tip:</strong> Después de limpiar el texto, cópialo y pégalo directamente en Word para obtener fórmulas matemáticas limpias.</p>
+        </footer>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
