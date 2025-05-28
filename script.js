@@ -198,6 +198,9 @@ function cleanLaTeXCommands(text) {
     // Limpiar comandos \text{...}
     text = text.replace(/\\text\{([^}]*)\}/gi, '$1');
     
+    // Limpiar fracciones LaTeX \frac{numerador}{denominador}
+    text = text.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/gi, '($1)/($2)');
+    
     // Limpiar arrays/tablas complejas con contenido matemático
     // Patrón más agresivo para arrays con contenido mixto
     text = text.replace(/\\begin\{array\}[^}]*\}[\s\S]*?\\end\{array\}/gi, (match) => {
@@ -238,6 +241,21 @@ function cleanLaTeXCommands(text) {
     text = text.replace(/\\pm/gi, '±');
     text = text.replace(/\\mp/gi, '∓');
     text = text.replace(/\\implies/gi, '⟹');
+    text = text.replace(/\\rightarrow/gi, '→');
+    text = text.replace(/\\leftarrow/gi, '←');
+    text = text.replace(/\\leftrightarrow/gi, '↔');
+    text = text.replace(/\\Rightarrow/gi, '⇒');
+    text = text.replace(/\\Leftarrow/gi, '⇐');
+    text = text.replace(/\\Leftrightarrow/gi, '⇔');
+    
+    // Símbolos matemáticos adicionales
+    text = text.replace(/\\neq/gi, '≠');
+    text = text.replace(/\\leq/gi, '≤');
+    text = text.replace(/\\geq/gi, '≥');
+    text = text.replace(/\\approx/gi, '≈');
+    text = text.replace(/\\equiv/gi, '≡');
+    text = text.replace(/\\propto/gi, '∝');
+    text = text.replace(/\\infty/gi, '∞');
     
     // Limpiar comandos de formato
     text = text.replace(/\\textbf\{([^}]*)\}/gi, '$1');
