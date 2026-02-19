@@ -1,443 +1,382 @@
-// Elementos del DOM
+// ============================================================
+// Limpiador de Tags Matemáticos - Strategy Pattern Architecture
+// ============================================================
+
+// --- DOM Elements ---
 const mathInput = document.getElementById('mathInput');
-const mathOutput = document.getElementById('mathOutput');
+const mathPreview = document.getElementById('mathPreview');
 const processBtn = document.getElementById('processBtn');
 const copyBtn = document.getElementById('copyBtn');
 const clearInput = document.getElementById('clearInput');
 const pasteBtn = document.getElementById('pasteBtn');
+const pasteHtmlBtn = document.getElementById('pasteHtmlBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const notification = document.getElementById('notification');
 
-// Función principal para limpiar tags matemáticos
-function cleanMathTags(text) {
-    if (!text.trim()) {
-        throw new Error('No hay texto para procesar');
+// --- State ---
+let lastResult = null;
+
+// ============================================================
+// Strategy Pattern - Cleaning Strategies
+// ============================================================
+
+class CleaningStrategy {
+    process(input) { throw new Error('Not implemented'); }
+}
+
+/**
+ * RichMathMLStrategy: Parses LaTeX $...$ and MathML blocks,
+ * renders with KaTeX for preview, builds MathML HTML for Word clipboard.
+ */
+class RichMathMLStrategy extends CleaningStrategy {
+    process(input) {
+        const segments = this.parseSegments(input);
+        const previewHTML = this.buildPreviewHTML(segments);
+        const wordHTML = this.buildWordHTML(segments);
+        return { previewHTML, wordHTML, segments };
     }
 
-    let cleanedText = text;
+    // --- Parsing (state-machine for robust $...$ handling) ---
+    parseSegments(text) {
+        const segments = [];
 
-    // Primero intentar extraer de tags <annotation encoding="application/x-tex">
-    const annotationRegex = /<annotation\s+encoding=["']application\/x-tex["'][^>]*>(.*?)<\/annotation>/gi;
-    const annotations = [];
-    let match;
-
-    while ((match = annotationRegex.exec(text)) !== null) {
-        annotations.push(match[1].trim());
-    }
-
-    // Si encontramos annotations, las usamos (método preferido)
-    if (annotations.length > 0) {
-        // Reemplazar cada tag <math>...</math> con su correspondiente annotation
-        const mathTagRegex = /<math[^>]*>.*?<\/math>/gi;
-        let annotationIndex = 0;
-        
-        cleanedText = text.replace(mathTagRegex, () => {
-            if (annotationIndex < annotations.length) {
-                return annotations[annotationIndex++];
-            }
-            return '';
+        // Step 1: Find <math>...</math> blocks and replace with placeholders
+        const mathmlBlocks = [];
+        let processed = text.replace(/<math[\s\S]*?<\/math>/gi, (m) => {
+            const idx = mathmlBlocks.length;
+            mathmlBlocks.push(m);
+            return `\x00MATHML_${idx}\x00`;
         });
-    } else {
-        // Si no hay annotations, procesar manualmente el MathML
-        cleanedText = processMathMLTags(text);
-    }
 
-    // Limpiar cualquier tag HTML/XML restante
-    cleanedText = cleanedText.replace(/<[^>]*>/g, '');
-    
-    // Decodificar entidades HTML
-    cleanedText = decodeHTMLEntities(cleanedText);
-    
-    // Limpiar comandos LaTeX y formatos especiales
-    cleanedText = cleanLaTeXCommands(cleanedText);
-    
-    // Limpiar casos específicos problemáticos adicionales
-    cleanedText = cleanSpecificProblematicCases(cleanedText);
-    
-    // Preservar formato: mantener saltos de línea y estructura
-    cleanedText = preserveTextFormat(cleanedText);
-    
-    // Limpiar caracteres especiales de MathML que puedan quedar
-    cleanedText = cleanMathMLCharacters(cleanedText);
-
-    if (!cleanedText.trim()) {
-        throw new Error('No se pudo extraer texto matemático del contenido proporcionado');
-    }
-
-    return cleanedText;
-}
-
-// Función para procesar tags MathML manualmente
-function processMathMLTags(text) {
-    let processed = text;
-
-    // Mapeo de operadores y símbolos MathML
-    const mathMLMap = {
-        // Operadores básicos
-        '&plus;': '+',
-        '&minus;': '-',
-        '&times;': '×',
-        '&divide;': '÷',
-        '&equals;': '=',
-        '&lt;': '<',
-        '&gt;': '>',
-        '&le;': '≤',
-        '&ge;': '≥',
-        '&ne;': '≠',
-        
-        // Paréntesis
-        '&lpar;': '(',
-        '&rpar;': ')',
-        '&lbrack;': '[',
-        '&rbrack;': ']',
-        
-        // Espacios (preservar algunos espacios)
-        '&nbsp;': ' ',
-        '&thinsp;': ' ',
-    };
-
-    // Reemplazar entidades conocidas
-    for (const [entity, replacement] of Object.entries(mathMLMap)) {
-        processed = processed.replace(new RegExp(entity, 'g'), replacement);
-    }
-
-    // Extraer contenido de elementos específicos de MathML
-    const mathMLTags = [
-        'mn', 'mi', 'mo', 'mtext', 'ms', 'mspace'
-    ];
-
-    for (const tag of mathMLTags) {
-        const regex = new RegExp(`<${tag}[^>]*>(.*?)<\/${tag}>`, 'gi');
-        processed = processed.replace(regex, (match, content) => {
-            // Limpiar contenido específico de cada tag
-            content = content.trim();
-            
-            // Si es un operador matemático, añadir espacios apropiados
-            if (tag === 'mo' && content.match(/^[+\-*/=<>≤≥≠]$/)) {
-                return ` ${content} `;
-            }
-            
-            return content;
+        // Step 2: Find $$...$$ blocks and replace with placeholders
+        const displayBlocks = [];
+        processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (m, latex) => {
+            const idx = displayBlocks.length;
+            displayBlocks.push(latex.trim());
+            return `\x00DISPLAY_${idx}\x00`;
         });
-    }
 
-    // Manejar potencias (msup)
-    processed = processed.replace(/<msup[^>]*>(.*?)<\/msup>/gi, (match, content) => {
-        const parts = content.split(/<\/?m[^>]*>/g).filter(p => p.trim());
-        if (parts.length >= 2) {
-            return `${parts[0]}^${parts[1]}`;
-        }
-        return content;
-    });
-
-    // Manejar subíndices (msub)
-    processed = processed.replace(/<msub[^>]*>(.*?)<\/msub>/gi, (match, content) => {
-        const parts = content.split(/<\/?m[^>]*>/g).filter(p => p.trim());
-        if (parts.length >= 2) {
-            return `${parts[0]}_${parts[1]}`;
-        }
-        return content;
-    });
-
-    // Manejar fracciones (mfrac)
-    processed = processed.replace(/<mfrac[^>]*>(.*?)<\/mfrac>/gi, (match, content) => {
-        const parts = content.split(/<\/?m[^>]*>/g).filter(p => p.trim());
-        if (parts.length >= 2) {
-            return `(${parts[0]})/(${parts[1]})`;
-        }
-        return content;
-    });
-
-    // Manejar raíces cuadradas (msqrt)
-    processed = processed.replace(/<msqrt[^>]*>(.*?)<\/msqrt>/gi, (match, content) => {
-        const cleanContent = content.replace(/<[^>]*>/g, '');
-        return `√(${cleanContent})`;
-    });
-
-    return processed;
-}
-
-// Función para decodificar entidades HTML
-function decodeHTMLEntities(text) {
-    const entityMap = {
-        '&amp;': '&',
-        '&lt;': '<',
-        '&gt;': '>',
-        '&quot;': '"',
-        '&apos;': "'",
-        '&nbsp;': ' ',
-        '&#x2B;': '+',
-        '&#x2D;': '-',
-        '&#x3D;': '=',
-        '&#x28;': '(',
-        '&#x29;': ')',
-        '&#x5E;': '^',
-        '&#x2F;': '/',
-        '&#x2A;': '*'
-    };
-
-    let decoded = text;
-    for (const [entity, replacement] of Object.entries(entityMap)) {
-        decoded = decoded.replace(new RegExp(entity, 'g'), replacement);
-    }
-
-    // Decodificar entidades numéricas
-    decoded = decoded.replace(/&#(\d+);/g, (match, dec) => {
-        return String.fromCharCode(dec);
-    });
-
-    decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => {
-        return String.fromCharCode(parseInt(hex, 16));
-    });
-
-    return decoded;
-}
-
-// Función para limpiar comandos LaTeX y formatos especiales
-function cleanLaTeXCommands(text) {
-    // Limpiar comandos \text{...}
-    text = text.replace(/\\text\{([^}]*)\}/gi, '$1');
-    
-    // Limpiar fracciones LaTeX \frac{numerador}{denominador}
-    text = text.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/gi, '($1)/($2)');
-    
-    // Limpiar arrays/tablas complejas con contenido matemático
-    // Patrón más agresivo para arrays con contenido mixto
-    text = text.replace(/\\begin\{array\}[^}]*\}[\s\S]*?\\end\{array\}/gi, (match) => {
-        // Extraer solo el contenido matemático útil del array
-        let content = match.replace(/\\begin\{array\}[^}]*\}/gi, '');
-        content = content.replace(/\\end\{array\}/gi, '');
-        content = content.replace(/\\hline/gi, '');
-        content = content.replace(/\\\\/gi, '\n');
-        content = content.replace(/&/gi, ' ');
-        return content;
-    });
-    
-    // Limpiar comandos de array/tabla restantes
-    text = text.replace(/\\begin\{array\}[^}]*\}/gi, '');
-    text = text.replace(/\\end\{array\}/gi, '');
-    
-    // Limpiar patrones problemáticos específicos como "2x2 + 3x + 1 + x2−2x + 43x2"
-    // Buscar y separar secuencias de números y variables pegadas
-    text = text.replace(/(\d+)([a-zA-Z])(\d+)/g, '$1$2^$3');
-    text = text.replace(/([a-zA-Z])(\d+)([+\-])(\d+)/g, '$1^$2 $3 $4');
-    
-    // Limpiar comandos de líneas
-    text = text.replace(/\\hline/gi, '');
-    text = text.replace(/\\\\/gi, '\n');
-    
-    // Limpiar espaciado LaTeX
-    text = text.replace(/\\quad/gi, ' ');
-    text = text.replace(/\\qquad/gi, ' ');
-    text = text.replace(/\\,/gi, ' ');
-    text = text.replace(/\\:/gi, ' ');
-    text = text.replace(/\\;/gi, ' ');
-    text = text.replace(/\\!/gi, '');
-    
-    // Limpiar otros comandos LaTeX comunes
-    text = text.replace(/\\cdot/gi, '·');
-    text = text.replace(/\\times/gi, '×');
-    text = text.replace(/\\div/gi, '÷');
-    text = text.replace(/\\pm/gi, '±');
-    text = text.replace(/\\mp/gi, '∓');
-    text = text.replace(/\\implies/gi, '⟹');
-    text = text.replace(/\\rightarrow/gi, '→');
-    text = text.replace(/\\leftarrow/gi, '←');
-    text = text.replace(/\\leftrightarrow/gi, '↔');
-    text = text.replace(/\\Rightarrow/gi, '⇒');
-    text = text.replace(/\\Leftarrow/gi, '⇐');
-    text = text.replace(/\\Leftrightarrow/gi, '⇔');
-    
-    // Símbolos matemáticos adicionales
-    text = text.replace(/\\neq/gi, '≠');
-    text = text.replace(/\\leq/gi, '≤');
-    text = text.replace(/\\geq/gi, '≥');
-    text = text.replace(/\\approx/gi, '≈');
-    text = text.replace(/\\equiv/gi, '≡');
-    text = text.replace(/\\propto/gi, '∝');
-    text = text.replace(/\\infty/gi, '∞');
-    
-    // Limpiar comandos de formato
-    text = text.replace(/\\textbf\{([^}]*)\}/gi, '$1');
-    text = text.replace(/\\textit\{([^}]*)\}/gi, '$1');
-    text = text.replace(/\\emph\{([^}]*)\}/gi, '$1');
-    text = text.replace(/\\underline\{([^}]*)\}/gi, '$1');
-    
-    // Limpiar caracteres especiales LaTeX
-    text = text.replace(/\\&/gi, '&');
-    text = text.replace(/\\%/gi, '%');
-    text = text.replace(/\\#/gi, '#');
-    text = text.replace(/\\\$/gi, '$');
-    text = text.replace(/\\{/gi, '{');
-    text = text.replace(/\\}/gi, '}');
-    
-    // Limpiar patrones de array residuales específicos
-    text = text.replace(/\{[r|c|l]+\}/gi, '');
-    text = text.replace(/&+/gi, ' ');
-    
-    return text;
-}
-
-// Función para limpiar casos específicos problemáticos
-function cleanSpecificProblematicCases(text) {
-    // Casos como "2x2 + 3x + 1 + x2−2x + 43x2 + x + 5"
-    // Separar dígitos pegados incorrectamente con variables
-    text = text.replace(/(\d)([a-zA-Z])(\d)(\s*[+\-]\s*)(\d)([a-zA-Z])/g, '$1$2^$3 $4 $5$6');
-    
-    // Casos como "43x2" donde debería ser "4 + 3x^2" o "43x^2"
-    text = text.replace(/(\d{2})([a-zA-Z])(\d)/g, (match, digits, variable, exp) => {
-        // Si son exactamente 2 dígitos, separar como suma
-        if (digits.length === 2 && parseInt(digits[0]) < 5 && parseInt(digits[1]) < 5) {
-            return `${digits[0]} + ${digits[1]}${variable}^${exp}`;
-        }
-        return `${digits}${variable}^${exp}`;
-    });
-    
-    // Limpiar secuencias como "x2−2x + 4" donde el primer término está pegado
-    text = text.replace(/([a-zA-Z])(\d)([\+\-])/g, '$1^$2 $3');
-    
-    // Limpiar casos donde hay múltiples expresiones pegadas sin separación
-    text = text.replace(/([a-zA-Z]\^\d+|[a-zA-Z]|\d+)([a-zA-Z])(\d+)([+\-])/g, '$1 + $2^$3 $4');
-    
-    // Casos específicos de arrays mal procesados
-    text = text.replace(/\\begin\{array\}\{[rcl|]*\}/, '');
-    text = text.replace(/\\end\{array\}/, '');
-    
-    // Limpiar residuos de tablas como separadores
-    text = text.replace(/\s*\|\s*/g, ' ');
-    text = text.replace(/_{2,}/g, '');
-    
-    return text;
-}
-
-// Función para preservar el formato del texto
-function preserveTextFormat(text) {
-    // Normalizar diferentes tipos de saltos de línea
-    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    
-    // Limpiar caracteres de control extraños que pueden aparecer
-    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-    
-    // Preservar párrafos y estructura
-    // Reemplazar múltiples saltos de línea por doble salto (párrafos)
-    text = text.replace(/\n\s*\n\s*\n+/g, '\n\n');
-    
-    // Limpiar espacios al inicio y final de cada línea, pero mantener la estructura
-    text = text.split('\n').map(line => {
-        // Limpiar caracteres extraños al inicio/final de línea
-        line = line.replace(/^[\s\u00A0\u2000-\u200B\u2028\u2029\u3000]+|[\s\u00A0\u2000-\u200B\u2028\u2029\u3000]+$/g, '');
-        
-        // Reemplazar múltiples espacios internos por uno solo, pero mantener estructura
-        return line.replace(/[ \t\u00A0\u2000-\u200B]+/g, ' ').trim();
-    }).join('\n');
-    
-    // Remover líneas completamente vacías excesivas (más de 2 seguidas)
-    text = text.replace(/\n{3,}/g, '\n\n');
-    
-    // Limpiar espacios al inicio y final del texto completo
-    text = text.trim();
-    
-    return text;
-}
-
-// Función para limpiar caracteres especiales de MathML
-function cleanMathMLCharacters(text) {
-    // Procesar línea por línea para mantener formato
-    const lines = text.split('\n');
-    
-    const cleanedLines = lines.map(line => {
-        // Limpiar secuencias problemáticas específicas como "2x2 + 3x + 1 + x2−2x + 43x2"
-        // Separar números y variables pegadas incorrectamente
-        line = line.replace(/(\d+)([a-zA-Z])([a-zA-Z])([+\-])/g, '$1$2^$3 $4');
-        line = line.replace(/([a-zA-Z])(\d+)([a-zA-Z])(\d+)/g, '$1^$2 + $3^$4');
-        
-        // Corregir patrones como "43x2" -> "4 + 3x^2"
-        line = line.replace(/(\d{2,})([a-zA-Z])(\d+)/g, (match, nums, variable, exp) => {
-            if (nums.length === 2) {
-                return `${nums[0]} + ${nums[1]}${variable}^${exp}`;
+        // Step 3: Find $...$ inline math using character scan
+        // This avoids lookbehind issues and handles single-char math like $E$
+        const inlineBlocks = [];
+        let result = '';
+        let i = 0;
+        while (i < processed.length) {
+            // Check for placeholder (don't scan inside them)
+            if (processed[i] === '\x00') {
+                const end = processed.indexOf('\x00', i + 1);
+                result += processed.substring(i, end + 1);
+                i = end + 1;
+                continue;
             }
-            return `${nums}${variable}^${exp}`;
-        });
-        
-        // Remover espacios extra alrededor de operadores matemáticos
-        line = line.replace(/\s*([+\-*/=<>≤≥≠])\s*/g, ' $1 ');
-        
-        // Remover espacios extra alrededor de paréntesis
-        line = line.replace(/\s*([()])\s*/g, '$1');
-        
-        // Limpiar puntos/dots extraños
-        line = line.replace(/\s*·\s*/g, ' · ');
-        line = line.replace(/\s*\^\s*/g, '^');
-        
-        // Limpiar caracteres especiales problemáticos
-        line = line.replace(/\{\}/g, '');
-        line = line.replace(/\{\s*\}/g, '');
-        line = line.replace(/\|+/g, '');
-        
-        // Limpiar múltiples operadores seguidos
-        line = line.replace(/([+\-])\s*([+\-])/g, '$1$2');
-        line = line.replace(/\s*([+\-])\s*([+\-])\s*/g, ' $1$2 ');
-        
-        // Limpiar espacios múltiples internos
-        line = line.replace(/\s{2,}/g, ' ');
-        
-        // Limpiar espacios al inicio y final de la línea
-        return line.trim();
-    });
-    
-    return cleanedLines.join('\n');
+
+            if (processed[i] === '$' && (i === 0 || processed[i - 1] !== '\\')) {
+                // Find matching closing $
+                let j = i + 1;
+                let found = false;
+                while (j < processed.length) {
+                    if (processed[j] === '\x00') {
+                        // Skip placeholders
+                        j = processed.indexOf('\x00', j + 1) + 1;
+                        continue;
+                    }
+                    if (processed[j] === '$' && processed[j - 1] !== '\\') {
+                        // Found closing $
+                        const latex = processed.substring(i + 1, j).trim();
+                        if (latex.length > 0) {
+                            const idx = inlineBlocks.length;
+                            inlineBlocks.push(latex);
+                            result += `\x00INLINE_${idx}\x00`;
+                            found = true;
+                            i = j + 1;
+                            break;
+                        }
+                    }
+                    j++;
+                }
+                if (!found) {
+                    result += processed[i];
+                    i++;
+                }
+            } else {
+                result += processed[i];
+                i++;
+            }
+        }
+        processed = result;
+
+        // Step 4: Split by placeholders and build segments
+        const parts = processed.split(/(\x00[A-Z]+_\d+\x00)/);
+        for (const part of parts) {
+            if (!part) continue;
+
+            const mathmlMatch = part.match(/^\x00MATHML_(\d+)\x00$/);
+            const displayMatch = part.match(/^\x00DISPLAY_(\d+)\x00$/);
+            const inlineMatch = part.match(/^\x00INLINE_(\d+)\x00$/);
+
+            if (mathmlMatch) {
+                const raw = mathmlBlocks[parseInt(mathmlMatch[1])];
+                const annot = /<annotation[^>]*encoding=["']application\/x-tex["'][^>]*>([\s\S]*?)<\/annotation>/i.exec(raw);
+                segments.push({
+                    type: 'math',
+                    latex: annot ? annot[1].trim() : raw.replace(/<[^>]*>/g, ''),
+                    displayMode: true,
+                    originalMathML: raw
+                });
+            } else if (displayMatch) {
+                segments.push({
+                    type: 'math',
+                    latex: displayBlocks[parseInt(displayMatch[1])],
+                    displayMode: true
+                });
+            } else if (inlineMatch) {
+                const latex = inlineBlocks[parseInt(inlineMatch[1])];
+                segments.push({
+                    type: 'math',
+                    latex: latex,
+                    displayMode: this.shouldBeDisplayMode(latex)
+                });
+            } else {
+                // Plain text
+                segments.push({ type: 'text', content: part });
+            }
+        }
+
+        return segments;
+    }
+
+    shouldBeDisplayMode(latex) {
+        return /\\begin\{(pmatrix|bmatrix|vmatrix|Vmatrix|matrix|cases|align|equation|gather)/.test(latex);
+    }
+
+    // --- Preview HTML (KaTeX HTML rendering) ---
+    buildPreviewHTML(segments) {
+        let html = '';
+        for (const seg of segments) {
+            if (seg.type === 'text') {
+                html += this.formatText(seg.content);
+            } else {
+                html += this.renderKaTeX(seg.latex, seg.displayMode, 'html');
+            }
+        }
+        return html;
+    }
+
+    // --- Word HTML (KaTeX MathML rendering) ---
+    buildWordHTML(segments) {
+        let body = '';
+        for (const seg of segments) {
+            if (seg.type === 'text') {
+                body += this.formatText(seg.content);
+            } else {
+                // Use original MathML if available, else generate via KaTeX
+                if (seg.originalMathML) {
+                    body += seg.originalMathML;
+                } else {
+                    body += this.renderKaTeX(seg.latex, seg.displayMode, 'mathml');
+                }
+            }
+        }
+        return `<html><head><meta charset="utf-8"></head><body style="font-family:Cambria,serif;font-size:12pt;">${body}</body></html>`;
+    }
+
+    // --- KaTeX rendering helper ---
+    renderKaTeX(latex, displayMode, output) {
+        try {
+            return katex.renderToString(latex, {
+                displayMode: displayMode,
+                throwOnError: false,
+                errorColor: '#cc0000',
+                strict: false,
+                trust: true,
+                output: output // 'html' or 'mathml'
+            });
+        } catch (e) {
+            const escaped = escapeHTML(latex);
+            return `<span class="math-error" title="${escapeHTML(e.message)}">${escaped}</span>`;
+        }
+    }
+
+    // --- Text formatting (Markdown-like → HTML) ---
+    formatText(text) {
+        let html = escapeHTML(text);
+
+        // Bold: **text** → <strong>text</strong>
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Italic: *text* → <em>text</em>
+        html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+        // Bullet points: lines starting with • or - (after newline)
+        html = html.replace(/^([•\-●])\s*/gm, '<span class="bullet">$1</span> ');
+
+        // Line breaks
+        html = html.replace(/\n/g, '<br>\n');
+
+        return html;
+    }
 }
 
-// Función para mostrar notificaciones
+/**
+ * PlainTextStrategy: Legacy plain text cleaning (kept as fallback).
+ */
+class PlainTextStrategy extends CleaningStrategy {
+    process(input) {
+        let text = input;
+
+        // Extract LaTeX from annotation tags
+        const annotationRegex = /<annotation\s+encoding=["']application\/x-tex["'][^>]*>(.*?)<\/annotation>/gi;
+        const annotations = [];
+        let match;
+        while ((match = annotationRegex.exec(input)) !== null) {
+            annotations.push(match[1].trim());
+        }
+
+        if (annotations.length > 0) {
+            let idx = 0;
+            text = input.replace(/<math[^>]*>.*?<\/math>/gi, () =>
+                idx < annotations.length ? annotations[idx++] : ''
+            );
+        }
+
+        // Strip HTML tags
+        text = text.replace(/<[^>]*>/g, '');
+        // Remove $...$ delimiters
+        text = text.replace(/\$\$([\s\S]+?)\$\$/g, '$1');
+        text = text.replace(/\$([^\$]+?)\$/g, '$1');
+        // Basic LaTeX cleanup
+        text = text.replace(/\\begin\{[^}]*\}/gi, '');
+        text = text.replace(/\\end\{[^}]*\}/gi, '');
+        text = text.replace(/\\\\/g, '\n');
+        text = text.replace(/&/g, ' ');
+        text = text.replace(/\\text\{([^}]*)\}/gi, '$1');
+        text = text.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/gi, '($1)/($2)');
+        text = text.replace(/\\left[(\[|]/g, m => m.slice(-1));
+        text = text.replace(/\\right[)\]|]/g, m => m.slice(-1));
+        text = text.replace(/\\[a-zA-Z]+/g, ' ');
+        text = text.replace(/[{}]/g, '');
+        text = text.replace(/\s{2,}/g, ' ');
+        text = text.trim();
+
+        return { plainText: text };
+    }
+}
+
+// --- Active Strategy ---
+let activeStrategy = new RichMathMLStrategy();
+
+// ============================================================
+// Utility Functions
+// ============================================================
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function showNotification(message, type = 'info') {
     notification.textContent = message;
     notification.className = `notification ${type}`;
     notification.classList.add('show');
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 3000);
+    setTimeout(() => notification.classList.remove('show'), 3500);
 }
 
-// Función para copiar al portapapeles
-async function copyToClipboard(text) {
+// ============================================================
+// Clipboard Functions
+// ============================================================
+
+async function copyRichHTMLToClipboard(html, plainText) {
     try {
-        await navigator.clipboard.writeText(text);
-        showNotification('✅ Texto copiado al portapapeles', 'success');
+        const htmlBlob = new Blob([html], { type: 'text/html' });
+        const textBlob = new Blob([plainText || ''], { type: 'text/plain' });
+        const item = new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob
+        });
+        await navigator.clipboard.write([item]);
+        showNotification('✅ Copiado al portapapeles (listo para Word)', 'success');
     } catch (err) {
-        // Fallback para navegadores que no soportan navigator.clipboard
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-        
-        try {
-            document.execCommand('copy');
-            showNotification('✅ Texto copiado al portapapeles', 'success');
-        } catch (fallbackErr) {
-            showNotification('❌ Error al copiar. Selecciona y copia manualmente.', 'error');
-        }
-        
-        document.body.removeChild(textArea);
+        console.error('Clipboard API failed, using fallback:', err);
+        fallbackRichCopy(html);
     }
 }
 
-// Función para pegar desde el portapapeles
+function fallbackRichCopy(html) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    tempDiv.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    document.body.appendChild(tempDiv);
+
+    const range = document.createRange();
+    range.selectNodeContents(tempDiv);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    try {
+        document.execCommand('copy');
+        showNotification('✅ Copiado (fallback)', 'success');
+    } catch (e) {
+        showNotification('❌ Error al copiar. Selecciona y copia manualmente.', 'error');
+    }
+
+    sel.removeAllRanges();
+    document.body.removeChild(tempDiv);
+}
+
 async function pasteFromClipboard() {
     try {
         const text = await navigator.clipboard.readText();
         mathInput.value = text;
+        autoResize(mathInput);
         showNotification('📋 Texto pegado desde el portapapeles', 'info');
     } catch (err) {
         showNotification('❌ No se pudo acceder al portapapeles. Pega manualmente con Ctrl+V.', 'error');
     }
 }
 
-// Función para descargar como archivo de texto
-function downloadAsText(text, filename = 'texto_limpio.txt') {
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+async function pasteHTMLFromClipboard() {
+    try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            if (item.types.includes('text/html')) {
+                const blob = await item.getType('text/html');
+                const html = await blob.text();
+                mathInput.value = html;
+                autoResize(mathInput);
+                showNotification('📋 HTML pegado (con MathML preservado)', 'success');
+                return;
+            }
+        }
+        // Fallback to plain text
+        await pasteFromClipboard();
+    } catch (err) {
+        showNotification('❌ No se pudo leer HTML. Usa "Pegar" normal.', 'error');
+    }
+}
+
+// ============================================================
+// Download Function
+// ============================================================
+
+function downloadAsHTML(html, filename = 'texto_limpio.html') {
+    const fullHTML = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Texto Matemático Limpio</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>
+body { font-family: Cambria, 'Times New Roman', serif; font-size: 12pt; line-height: 1.8; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+.bullet { font-weight: bold; }
+strong { font-weight: 700; }
+</style>
+</head>
+<body>
+${html}
+</body>
+</html>`;
+    const blob = new Blob([fullHTML], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -447,161 +386,147 @@ function downloadAsText(text, filename = 'texto_limpio.txt') {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showNotification('📥 Archivo descargado', 'success');
+    showNotification('📥 Archivo HTML descargado', 'success');
 }
 
+// ============================================================
+// Plain text extraction from segments (for clipboard fallback)
+// ============================================================
+
+function getPlainText(segments) {
+    return segments.map(seg => seg.type === 'text' ? seg.content : seg.latex).join('');
+}
+
+// ============================================================
 // Event Listeners
+// ============================================================
+
 processBtn.addEventListener('click', () => {
     const inputText = mathInput.value.trim();
-    
     if (!inputText) {
         showNotification('⚠️ Por favor, ingresa algún texto para procesar', 'error');
         mathInput.focus();
         return;
     }
 
-    try {
-        processBtn.classList.add('loading');
-        processBtn.textContent = 'Procesando...';
-        
-        // Simular un pequeño delay para mostrar el estado de carga
-        setTimeout(() => {
-            try {
-                const cleanedText = cleanMathTags(inputText);
-                mathOutput.value = cleanedText;
-                showNotification('✨ ¡Texto limpiado exitosamente!', 'success');
-            } catch (error) {
-                showNotification(`❌ Error: ${error.message}`, 'error');
-                mathOutput.value = '';
-            } finally {
-                processBtn.classList.remove('loading');
-                processBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Limpiar Tags';
+    processBtn.classList.add('loading');
+    processBtn.textContent = 'Procesando...';
+
+    setTimeout(() => {
+        try {
+            lastResult = activeStrategy.process(inputText);
+
+            if (lastResult.previewHTML) {
+                mathPreview.innerHTML = lastResult.previewHTML;
+                mathPreview.classList.add('has-content');
+            } else if (lastResult.plainText) {
+                mathPreview.textContent = lastResult.plainText;
+                mathPreview.classList.add('has-content');
             }
-        }, 500);
-        
-    } catch (error) {
-        showNotification(`❌ Error inesperado: ${error.message}`, 'error');
-        processBtn.classList.remove('loading');
-        processBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Limpiar Tags';
-    }
+
+            showNotification('✨ ¡Texto limpiado y renderizado exitosamente!', 'success');
+        } catch (error) {
+            showNotification(`❌ Error: ${error.message}`, 'error');
+            mathPreview.innerHTML = '<p class="placeholder-text">Error al procesar.</p>';
+            lastResult = null;
+        } finally {
+            processBtn.classList.remove('loading');
+            processBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Limpiar Tags';
+        }
+    }, 300);
 });
 
 copyBtn.addEventListener('click', () => {
-    const outputText = mathOutput.value.trim();
-    
-    if (!outputText) {
-        showNotification('⚠️ No hay texto para copiar. Primero procesa algún contenido.', 'error');
+    if (!lastResult) {
+        showNotification('⚠️ No hay resultado. Primero procesa algún contenido.', 'error');
         return;
     }
-    
-    copyToClipboard(outputText);
+
+    if (lastResult.wordHTML) {
+        const plainText = getPlainText(lastResult.segments);
+        copyRichHTMLToClipboard(lastResult.wordHTML, plainText);
+    } else if (lastResult.plainText) {
+        navigator.clipboard.writeText(lastResult.plainText)
+            .then(() => showNotification('✅ Texto copiado', 'success'))
+            .catch(() => showNotification('❌ Error al copiar', 'error'));
+    }
 });
 
 clearInput.addEventListener('click', () => {
     mathInput.value = '';
-    mathOutput.value = '';
-    
-    // Resetear tamaño de ambos textareas
+    mathPreview.innerHTML = '<p class="placeholder-text">Aquí aparecerá tu texto limpio con fórmulas renderizadas...</p>';
+    mathPreview.classList.remove('has-content');
     resetTextareaSize(mathInput);
-    resetTextareaSize(mathOutput);
-    
+    lastResult = null;
     mathInput.focus();
-    showNotification('🗑️ Texto limpiado', 'info');
+    showNotification('🗑️ Limpiado', 'info');
 });
 
-pasteBtn.addEventListener('click', () => {
-    pasteFromClipboard();
-});
+pasteBtn.addEventListener('click', pasteFromClipboard);
+pasteHtmlBtn.addEventListener('click', pasteHTMLFromClipboard);
 
 downloadBtn.addEventListener('click', () => {
-    const outputText = mathOutput.value.trim();
-    
-    if (!outputText) {
-        showNotification('⚠️ No hay texto para descargar. Primero procesa algún contenido.', 'error');
+    if (!lastResult) {
+        showNotification('⚠️ No hay resultado para descargar. Primero procesa.', 'error');
         return;
     }
-    
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
-    downloadAsText(outputText, `texto_matematico_limpio_${timestamp}.txt`);
+    const html = lastResult.previewHTML || lastResult.plainText || '';
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+    downloadAsHTML(html, `texto_matematico_${ts}.html`);
 });
 
-// Atajos de teclado
+// Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + Enter para procesar
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        processBtn.click();
-    }
-    
-    // Ctrl/Cmd + D para descargar
-    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-        e.preventDefault();
-        downloadBtn.click();
-    }
-    
-    // Esc para limpiar
-    if (e.key === 'Escape') {
-        e.preventDefault();
-        clearInput.click();
-    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); processBtn.click(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); downloadBtn.click(); }
+    if (e.key === 'Escape') { e.preventDefault(); clearInput.click(); }
 });
 
-// Auto-resize de textareas
+// ============================================================
+// UI Utilities
+// ============================================================
+
 function autoResize(textarea) {
-    // Resetear height para calcular el tamaño correcto
     textarea.style.height = 'auto';
-    
-    // Calcular altura necesaria considerando contenido
-    const minHeight = 200;
-    const maxHeight = 600; // Límite máximo para evitar textareas gigantes
-    let newHeight = Math.max(minHeight, textarea.scrollHeight);
-    
-    // Si el textarea está vacío o casi vacío, volver al tamaño mínimo
-    if (textarea.value.trim().length === 0) {
-        newHeight = minHeight;
-    } else {
-        newHeight = Math.min(maxHeight, newHeight);
-    }
-    
-    textarea.style.height = newHeight + 'px';
+    const min = 200, max = 600;
+    let h = Math.max(min, textarea.scrollHeight);
+    if (!textarea.value.trim()) h = min;
+    else h = Math.min(max, h);
+    textarea.style.height = h + 'px';
 }
 
-// Función para resetear tamaño de textarea
 function resetTextareaSize(textarea) {
     textarea.style.height = '200px';
 }
 
 mathInput.addEventListener('input', () => autoResize(mathInput));
-mathOutput.addEventListener('input', () => autoResize(mathOutput));
-
-// Detectar cuando se borra todo el contenido y resetear tamaño
 mathInput.addEventListener('input', (e) => {
-    if (e.target.value.trim().length === 0) {
-        resetTextareaSize(mathInput);
-    } else {
-        autoResize(mathInput);
-    }
+    if (!e.target.value.trim()) resetTextareaSize(mathInput);
+    else autoResize(mathInput);
 });
 
-mathOutput.addEventListener('input', (e) => {
-    if (e.target.value.trim().length === 0) {
-        resetTextareaSize(mathOutput);
-    } else {
-        autoResize(mathOutput);
-    }
-});
-
-// Procesar automáticamente cuando se pega contenido
-mathInput.addEventListener('paste', (e) => {
+// Auto-detect math content on paste
+mathInput.addEventListener('paste', () => {
     setTimeout(() => {
-        const pastedText = mathInput.value;
-        if (pastedText.includes('<math') || pastedText.includes('xmlns')) {
-            showNotification('📋 Contenido MathML detectado. ¡Listo para procesar!', 'info');
+        const text = mathInput.value;
+        if (text.includes('<math') || text.includes('$') || text.includes('\\begin{')) {
+            showNotification('📋 Contenido matemático detectado. ¡Listo para procesar!', 'info');
         }
     }, 100);
 });
 
-// Mensaje de bienvenida
+// Render example on load
 window.addEventListener('load', () => {
-    showNotification('👋 ¡Bienvenido! Pega tu contenido con tags MathML y haz clic en "Limpiar Tags"', 'info');
-}); 
+    showNotification('👋 ¡Bienvenido! Pega contenido con fórmulas y haz clic en "Limpiar Tags"', 'info');
+    const exampleDiv = document.getElementById('exampleRendered');
+    if (exampleDiv && typeof katex !== 'undefined') {
+        try {
+            exampleDiv.innerHTML = katex.renderToString(
+                'A = \\begin{pmatrix} 2 & 3 \\\\ -1 & 4 \\end{pmatrix}',
+                { displayMode: true, throwOnError: false }
+            );
+        } catch (e) {
+            exampleDiv.textContent = 'A = ((2, 3), (-1, 4))';
+        }
+    }
+});

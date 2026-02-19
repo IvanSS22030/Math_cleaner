@@ -126,6 +126,85 @@ textarea[readonly] {
     color: var(--text-primary);
 }
 
+/* ============================================================
+   Output Preview (Rich Math Rendering)
+   ============================================================ */
+.output-preview {
+    width: 100%;
+    min-height: 200px;
+    max-height: 700px;
+    overflow-y: auto;
+    padding: 1.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: #fefefe;
+    color: var(--text-primary);
+    font-family: 'Cambria', 'Times New Roman', 'Segoe UI', serif;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    transition: var(--transition);
+}
+
+.output-preview.has-content {
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.output-preview .placeholder-text {
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 3rem 1rem;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Math rendering inside preview */
+.output-preview .katex-display {
+    margin: 0.8rem 0;
+    padding: 0.5rem 0;
+}
+
+.output-preview .katex {
+    font-size: 1.15em;
+}
+
+.output-preview .math-error {
+    color: #cc0000;
+    background: #fff0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.output-preview strong {
+    font-weight: 700;
+    color: #111;
+}
+
+.output-preview em {
+    font-style: italic;
+}
+
+.output-preview .bullet {
+    display: inline-block;
+    margin-right: 0.3rem;
+    font-weight: bold;
+}
+
+/* Example rendered math */
+.example-rendered {
+    background: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.example-rendered .katex-display {
+    margin: 0;
+}
+
 /* Botones */
 .btn-primary,
 .btn-secondary,
@@ -307,6 +386,11 @@ footer p {
         right: 1rem;
         left: 1rem;
     }
+
+    .output-preview {
+        font-size: 0.95rem;
+        padding: 1rem;
+    }
 }
 
 /* Animaciones */
@@ -351,4 +435,4 @@ footer p {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-} 
+}

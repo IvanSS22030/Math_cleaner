@@ -4,14 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Limpiador de Tags Matemáticos</title>
+    <meta name="description" content="Convierte fórmulas matemáticas con tags MathML/LaTeX a contenido listo para pegar en Word con ecuaciones renderizadas.">
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <h1><i class="fas fa-magic"></i> Limpiador de Tags Matemáticos</h1>
-            <p>Convierte fórmulas matemáticas con tags MathML a texto limpio para Word</p>
+            <p>Convierte fórmulas matemáticas con tags MathML/LaTeX a contenido renderizado listo para Word</p>
         </header>
 
         <main>
@@ -21,10 +25,11 @@
                 </label>
                 <textarea 
                     id="mathInput" 
-                    placeholder="Pega aquí el texto que copiaste de Grok o cualquier IA que contenga fórmulas matemáticas con tags MathML...
+                    placeholder="Pega aquí el texto que copiaste de Grok, ChatGPT o cualquier IA que contenga fórmulas matemáticas con $...$ o tags MathML...
 
 Ejemplo:
-&lt;math xmlns=&quot;http://www.w3.org/1998/Math/MathML&quot;&gt;&lt;semantics&gt;...&lt;/semantics&gt;&lt;/math&gt;"
+1) Encontrar la matriz elemental $E$ tal que $EA = B$
+$A = \begin{pmatrix} 2 & 3 \\ -1 & 4 \end{pmatrix}$"
                     rows="8"
                 ></textarea>
                 <div class="input-actions">
@@ -33,6 +38,9 @@ Ejemplo:
                     </button>
                     <button id="pasteBtn" class="btn-secondary">
                         <i class="fas fa-clipboard"></i> Pegar del portapapeles
+                    </button>
+                    <button id="pasteHtmlBtn" class="btn-secondary" title="Pega contenido HTML rico (conserva MathML)">
+                        <i class="fas fa-code"></i> Pegar HTML
                     </button>
                 </div>
             </div>
@@ -44,21 +52,18 @@ Ejemplo:
             </div>
 
             <div class="output-section">
-                <label for="mathOutput">
-                    <i class="fas fa-check-circle"></i> Texto limpio (listo para Word):
+                <label>
+                    <i class="fas fa-check-circle"></i> Vista previa (listo para Word):
                 </label>
-                <textarea 
-                    id="mathOutput" 
-                    placeholder="Aquí aparecerá tu texto limpio, sin tags MathML..."
-                    rows="8"
-                    readonly
-                ></textarea>
+                <div id="mathPreview" class="output-preview">
+                    <p class="placeholder-text">Aquí aparecerá tu texto limpio con fórmulas renderizadas...</p>
+                </div>
                 <div class="output-actions">
                     <button id="copyBtn" class="btn-success">
                         <i class="fas fa-copy"></i> Copiar resultado
                     </button>
                     <button id="downloadBtn" class="btn-secondary">
-                        <i class="fas fa-download"></i> Descargar como .txt
+                        <i class="fas fa-download"></i> Descargar como .html
                     </button>
                 </div>
             </div>
@@ -67,16 +72,16 @@ Ejemplo:
         <div class="examples-section">
             <h3><i class="fas fa-lightbulb"></i> ¿Cómo funciona?</h3>
             <div class="example">
-                <h4>Antes (con tags):</h4>
-                <code>&lt;math xmlns="http://www.w3.org/1998/Math/MathML"&gt;&lt;semantics&gt;&lt;mrow&gt;&lt;mo&gt;(&lt;/mo&gt;&lt;mn&gt;2&lt;/mn&gt;&lt;msup&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;mn&gt;2&lt;/mn&gt;&lt;/msup&gt;&lt;mo&gt;+&lt;/mo&gt;&lt;mn&gt;3&lt;/mn&gt;&lt;mi&gt;x&lt;/mi&gt;&lt;mo&gt;+&lt;/mo&gt;&lt;mn&gt;1&lt;/mn&gt;&lt;mo&gt;)&lt;/mo&gt;&lt;/mrow&gt;&lt;annotation encoding="application/x-tex"&gt;(2x^2 + 3x + 1)&lt;/annotation&gt;&lt;/semantics&gt;&lt;/math&gt;</code>
+                <h4>Antes (con tags LaTeX):</h4>
+                <code>$A = \begin{pmatrix} 2 & 3 \\ -1 & 4 \end{pmatrix}$</code>
                 
-                <h4>Después (texto limpio):</h4>
-                <code>(2x^2 + 3x + 1)</code>
+                <h4>Después (renderizado para Word):</h4>
+                <div id="exampleRendered" class="example-rendered"></div>
             </div>
         </div>
 
         <footer>
-            <p>💡 <strong>Tip:</strong> Después de limpiar el texto, cópialo y pégalo directamente en Word para obtener fórmulas matemáticas limpias.</p>
+            <p>💡 <strong>Tip:</strong> Haz clic en "Copiar resultado" y pega directamente en Word (Ctrl+V). Las fórmulas se renderizarán como ecuaciones.</p>
         </footer>
     </div>
 
@@ -84,4 +89,4 @@ Ejemplo:
 
     <script src="script.js"></script>
 </body>
-</html> 
+</html>
